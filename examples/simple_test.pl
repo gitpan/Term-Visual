@@ -2,7 +2,7 @@
 use strict;
 sub Term::Visual::DEBUG () { 1 }
 sub Term::Visual::DEBUG_FILE () { 'test.log' }
-
+use lib '../.';
 use Carp;
 use POE;
 use Term::Visual;

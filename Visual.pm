@@ -1,11 +1,11 @@
-# $Id: Visual.pm,v 0.05 2003/01/14 23:00:18 lunartear Exp $
+# $Id: Visual.pm,v 0.06 2003/01/14 23:00:18 lunartear Exp $
 # Copyrights and documentation are after __END__.
 package Term::Visual;
 use strict;
 use warnings;
 use vars qw($VERSION $REVISION $console);
-$VERSION = '0.05';
-$REVISION = do {my@r=(q$Revision: 0.05 $=~/\d+/g);sprintf"%d."."%02d"x$#r,@r};
+$VERSION = '0.06';
+$REVISION = do {my@r=(q$Revision: 0.06 $=~/\d+/g);sprintf"%d."."%02d"x$#r,@r};
 
 use Term::Visual::StatusBar;
 use POE qw(Wheel::Curses Wheel::ReadWrite ); 
@@ -1807,16 +1807,41 @@ Term::Visual - split-terminal user interface
         Use_Status   => 0, # Don't use a statusbar
 
         Title        => "Title of foo"  );
+
+  POE::Session->create
+    (inline_states => {
+       _start         => \&start_handler,
+       got_term_input => \&term_input_handler,
+     }
+    );
+
+  sub _start_handler {
+    my $kernel = $_[KERNEL];
+
+    # Tell the terminal to send me input as "got_term_input".
+    $kernel->post( interface => send_me_input => "got_term_input" );
                     
-  $vt->set_status_field( $window_id, bar => $value );
+    $vt->set_status_field( $window_id, bar => $value );
 
-  $vt->print( $window_id, "my Window ID is $window_id" );
+    $vt->print( $window_id, "my Window ID is $window_id" );
+  }
 
-  $vt->shutdown; # not implemented yet.
+  sub term_input_handler {
+      my ($kernel, $heap, $input, $exception) = @_[KERNEL, HEAP, ARG0, ARG1];
 
-  for now use delete_window
+      # Got an exception.  These are interrupt (^C) or quit (^\).
+      if (defined $exception) {
+        warn "got exception: $exception";
+        exit;
+      }
+      $vt->print($window_id, $input);
+  }
 
-  $vt->delete_window( $window_id );
+  # Only use delete_window if using multiple windows.
+  $vt->delete_window( $window_id ); 
+
+  $vt->shutdown; 
+
 
 =head1 DESCRIPTION
 
@@ -1925,6 +1950,46 @@ Don't use Term::Visual's StatusBar.
 
 No need to declare Use_Status or Use_Title if you want to use
 the Statusbar or Titlebar.
+
+
+=item send_me_input
+
+send_me_input is a handler Term::Visual uses to send the client input
+from a keyboard and mouse.
+
+create a handler for parsing the input in your POE Session.
+
+  POE::Session->create
+    (inline_states => {
+       _start         => \&start_handler,
+       got_term_input => \&term_input_handler,
+     }
+    );
+ 
+POE's _start handler is a good place to tell Term::Visual how to send you input.
+
+  sub start_handler {
+    my $kernel = $_[KERNEL];
+ 
+    # Tell the terminal to send me input as "got_term_input".
+    $kernel->post( interface => send_me_input => "got_term_input" );
+    ...
+  }    
+
+Now create your "term_input_handler" to parse input.
+In this case we simply check for exceptions and print 
+the input to the screen.
+
+  sub term_input_handler {
+    my ($kernel, $heap, $input, $exception) = @_[KERNEL, HEAP, ARG0, ARG1];
+
+    # Got an exception.  These are interrupt (^C) or quit (^\).
+    if (defined $exception) {
+      warn "got exception: $exception";
+      exit;
+    }
+    $vt->print($window_id, $input);
+  }
 
 =item print
 
@@ -2247,6 +2312,9 @@ Term::Visual is free software; you may redistribute it and/or modify
 it under the same terms as Perl itself.
 
 Questions and Comments can be sent to lunartear+visterm@ambientheory.com
+
+Please send bug reports and wishlist items to:
+ http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Term-Visual
 
 =back
 
