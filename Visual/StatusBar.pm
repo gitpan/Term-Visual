@@ -1,9 +1,10 @@
-# $Id: StatusBar.pm,v 1.1 2003/01/11 20:08:51 lunartear Exp $
+# $Id: StatusBar.pm,v 1.1 2003/04/06 12:39:02 lunartear Exp $
 ### Manage the status bar.
 
 package Term::Visual::StatusBar;
 
 use strict;
+use warnings;
 
 use vars qw($VERSION);
 $VERSION = (qw($Revision: 1.1 $ ))[1];
@@ -59,7 +60,7 @@ sub set_format {
 
     if (defined $self->[STATUS_LINES]->[$line]) {
       if (DEBUG) { print ERRS "the line is being redefined\n"; }
-      for my $field (keys %{ $self->[STATUS_LINES]->[$line]->{SL_OFFSETS}}) {
+      for my $field (keys %{$self->[STATUS_LINES]->[$line]->[SL_OFFSETS]}) {
         delete $self->[FIELD_TO_LINE]->{$field};
       }
     }

@@ -9,8 +9,8 @@ my @files = qw(/var/log/messages /var/log/kernel.log /var/log/maillog
 
 # Start Term::Visual.
 
-my $vt = Term::Visual->new( Alias => "interface",
-                                        Errlevel => 0 );
+my $vt = Term::Visual->new( Alias => "interface" );
+                                        
 
 $vt->set_palette( mycolor       => "magenta on black",
                   statcolor     => "green on black",
@@ -157,7 +157,7 @@ sub reset_tail {
 }
 
 $poe_kernel->run();
-$vt->delete_window($window_id);
+$vt->shutdown;
 exit 0;
 
 

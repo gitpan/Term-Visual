@@ -4,8 +4,7 @@ use Carp;
 use POE;
 use Term::Visual;
 
-my $vt = Term::Visual->new( Alias => "interface",
-                                        Errlevel => 0 );
+my $vt = Term::Visual->new( Alias => "interface" );
 
 $vt->set_palette( mycolor       => "magenta on black",
                   statcolor     => "green on black",
@@ -60,5 +59,5 @@ sub handle_term_input {
 }
 
 $poe_kernel->run();
-$vt->delete_window($window_id);
+$vt->shutdown;
 exit 0;

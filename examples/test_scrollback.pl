@@ -4,13 +4,12 @@ use Carp;
 use POE;
 use Term::Visual;
 
-sub MAX_SECS_BETWEEN_LINES  () { 15 }
+sub MAX_SECS_BETWEEN_LINES  () { 5 }
 sub MAX_SECS_BETWEEN_STATUS () { 60 }
 sub MAX_SECS_BETWEEN_STDERR () { 30 }
 my @alphabet = ('A'..'Z', 'a'..'z', '0'..'9');
 
-my $vt = Term::Visual->new( Alias => "interface",
-                                        Errlevel => 0 );
+my $vt = Term::Visual->new( Alias => "interface" );
 
 $vt->set_palette( mycolor       => "magenta on black",
                   statcolor     => "green on black",
@@ -79,11 +78,6 @@ sub handle_term_input {
 #  beep();
   my ($kernel, $heap, $input, $exception) = @_[KERNEL, HEAP, ARG0, ARG1];
 
-  # Got an exception.  These are interrupt (^C) or quit (^\).
-  if (defined $exception) {
-    warn "got exception: $exception";
-    exit;
-  }
   $vt->print($window_id, $input);
 }
 
@@ -138,5 +132,5 @@ sub activity {
 
 $poe_kernel->run();
 
-$vt->delete_window($window_id);
+$vt->shutdown;
 exit 0;

@@ -1,11 +1,12 @@
 #!/usr/bin/perl -W
 use strict;
+sub Term::Visual::DEBUG () { 1 }
+sub Term::Visual::DEBUG_FILE () { 'test.log' }
+
 use Carp;
 use POE;
 use Term::Visual;
-
-my $vt = Term::Visual->new( Alias => "interface",
-                                        Errlevel => 0 );
+my $vt = Term::Visual->new( Alias => "interface" );
 
 $vt->set_palette( mycolor       => "magenta on black",
                   statcolor     => "green on black",
@@ -57,7 +58,7 @@ $vt->print($window_id, "My Window ID is $window_id");
 $vt->print($window_id, $vt->get_palette);
 $vt->print($window_id, "---------------------------------------");
 $vt->print($window_id, $vt->get_palette("st_values", "ncolor"));
-
+$vt->debug("testing debugging");
 ## Initialize the back-end guts of the "client".
 
 sub start_guts {
@@ -117,5 +118,5 @@ sub test_buffer {
 }
 
 $poe_kernel->run();
-$vt->delete_window($window_id);
+$vt->shutdown;
 exit 0;
