@@ -1,11 +1,11 @@
-# $Id: Visual.pm,v 0.02 2003/01/14 23:00:18 lunartear Exp $
+# $Id: Visual.pm,v 0.03 2003/01/14 23:00:18 lunartear Exp $
 # Copyrights and documentation are after __END__.
 package Term::Visual;
 
 use strict;
 use warnings;
 use vars qw($VERSION $console);
-$VERSION = (qw($Revision: 0.02 $ ))[1];
+$VERSION = (qw($Revision: 0.03 $ ))[1];
 
 use Term::Visual::StatusBar;
 use POE qw(Wheel::Curses Wheel::ReadWrite ); 
@@ -229,7 +229,7 @@ if (DEBUG) { print ERRS $status, " <-status in create_window\n"; }
         $status->erase();
         $status->noutrefresh();
 
-        $winref->{Status_Object} = Curses::Visterm::StatusBar->new();
+        $winref->{Status_Object} = Term::Visual::StatusBar->new();
         set_status_format( $self, $new_window_id, %{$params{Status}});
         $winref->{Status_Lines} = $winref->{Status_Object}->get();
         if (DEBUG) { print ERRS "passed set_status_format in create_window\n"; }
