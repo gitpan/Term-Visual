@@ -1,11 +1,11 @@
-# $Id: Visual.pm,v 0.03 2003/01/14 23:00:18 lunartear Exp $
+# $Id: Visual.pm,v 0.04 2003/01/14 23:00:18 lunartear Exp $
 # Copyrights and documentation are after __END__.
 package Term::Visual;
 
 use strict;
 use warnings;
 use vars qw($VERSION $console);
-$VERSION = (qw($Revision: 0.03 $ ))[1];
+$VERSION = (qw($Revision: 0.04 $ ))[1];
 
 use Term::Visual::StatusBar;
 use POE qw(Wheel::Curses Wheel::ReadWrite ); 
@@ -404,8 +404,10 @@ sub set_title {
   my $validity = validate_window($self, $window_id);
   if ($validity) {
     $self->[WINDOW]->{$window_id}->{Title} = $title;
-    _refresh_title( $self, $window_id ); 
-    doupdate();
+    if ($window_id == $self->[CUR_WIN]) {
+      _refresh_title( $self, $window_id ); 
+      doupdate();
+    }
   }
   else {
     if (DEBUG) { print ERRS "Window $window_id is nonexistant\n"; }
@@ -491,7 +493,7 @@ sub print {
   # Refresh the buffer when it's all done.
   _refresh_buffer($self, $window_id);  
   _refresh_edit($self, $window_id);    
-  if ($window_id == $self->[CUR_WIN]) { doupdate(); } #MARK        
+  doupdate();         
 
   } # end brace of if ($validity) 
   else {
@@ -999,6 +1001,8 @@ sub _refresh_buffer {
   my $window_id = shift;
   my $winref = $self->[WINDOW]->{$window_id};
   my $screen = $winref->{Window_Screen};
+
+  if ($window_id != $self->[CUR_WIN]) { return; }
   # Adjust the buffer row to compensate for any scrolling we encounter
   # while in scrollback.
 
@@ -1265,6 +1269,9 @@ sub _refresh_title {
   my ($self, $window_id) = @_;
   my $winref = $self->[WINDOW]->{$window_id};
   my $title = $winref->{Window_Title};
+
+  if ($window_id != $self->[CUR_WIN]) { return; }
+
   $title->move(TITLE_LINE, TITLE_COL);
   $title->attrset($self->[PALETTE]->{st_values}->[PAL_PAIR]); 
   $title->noutrefresh();
@@ -1459,6 +1466,9 @@ if (DEBUG) { print ERRS "returned from refresh_status\n"; }
 sub _refresh_status {
   if (DEBUG) { print ERRS "Enter _refresh_status\n"; }
   my ($self, $window_id) = (shift, shift);
+
+  if ($window_id != $self->[CUR_WIN]) { return; }
+
   my ($row, $value);
   my $winref = $self->[WINDOW]->{$window_id};
   my $status = $winref->{Window_Status};

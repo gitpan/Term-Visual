@@ -9,3 +9,4 @@ examples/no_status_title.pl
 examples/simple_test.pl
 examples/test_multiple_win.pl
 examples/test_scrollback.pl
+t/use.t
