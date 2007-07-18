@@ -12,3 +12,4 @@ examples/test_multiple_win.pl
 examples/test_scrollback.pl
 examples/tailall.pl
 t/use.t
+META.yml                                 Module meta-data (added by MakeMaker)

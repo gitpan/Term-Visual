@@ -41,7 +41,7 @@ sub start_guts {
 
   # Tell the terminal to send me input as "got_term_input".
   $kernel->post( interface => send_me_input => "got_term_input" );
-
+#  $vt->print($window_id, $vt->[0]{$window_id}->{Screen_Height});
 }
 
 ### The main input handler for this program.  This would be supplied

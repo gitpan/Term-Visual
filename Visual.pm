@@ -4,9 +4,9 @@ package Term::Visual;
 use strict;
 use warnings;
 use vars qw($VERSION $REVISION $console);
-$VERSION = '0.06';
+$VERSION = '0.07';
 $REVISION = do {my@r=(q$Revision: 0.06 $=~/\d+/g);sprintf"%d."."%02d"x$#r,@r};
-
+#use Visual::StatusBar;
 use Term::Visual::StatusBar;
 use POE qw(Wheel::Curses Wheel::ReadWrite ); 
 use Curses;
@@ -148,6 +148,7 @@ sub start_terminal {
   
   $kernel->alias_set( $alias );
   $console = POE::Wheel::Curses->new( InputEvent => 'private_input');
+   use_default_colors();
   my $old_mouse_events = 0;
   mousemask(0, $old_mouse_events);
 
@@ -194,7 +195,11 @@ sub create_window {
   my $use_status = 1 unless defined $params{Use_Status};
   my $new_window_id = CREATE_WINDOW_ID($self);
   my $window_name = $params{Window_Name} || $new_window_id;
-
+  my $input_prompt = $params{Input_Prompt} || ""; 
+  my $prompt_size = 0;
+  if (length $input_prompt) {
+       $prompt_size = length( $input_prompt ) ;
+  }
   my $input;
   if ($self->[COMMON_INPUT]) {
     $input = $self->[COMMON_INPUT];
@@ -206,11 +211,13 @@ sub create_window {
        Command_History  => [ ],
        Data             => "",
        Data_Save        => "",
-       Cursor           => 0,
+       Cursor           => $prompt_size || 0,
        Cursor_Save      => 0,
        Tab_Complete     => undef,
        Insert           => 1,
        Edit_Position    => 0,
+       Prompt           => $input_prompt,
+       Prompt_Size      => $prompt_size,
     };
   }
   # Allow override of possible global options
@@ -692,7 +699,11 @@ sub got_curses_input {
   # Beginning of line.
   if ($key eq '^A' or $key eq 'KEY_HOME') {
     if ($winref->{Input}{Cursor}) {
-      $winref->{Input}{Cursor} = 0;
+      if ($winref->{Input}{Prompt_Size}) {
+        $winref->{Input}{Cursor} = $winref->{Input}{Prompt_Size};
+      } else {
+         $winref->{Input}{Cursor} = 0;
+      }
       _refresh_edit($self, $window_id); 
       doupdate();        
     }
@@ -702,9 +713,15 @@ sub got_curses_input {
   # Back one character.
   if ($key eq 'KEY_LEFT') {
     if ($winref->{Input}{Cursor}) {
-      $winref->{Input}{Cursor}--;
-      _refresh_edit($self, $window_id);
-      doupdate();
+      if($winref->{Input}{Prompt}) {
+        if($winref->{Input}{Cursor} > $winref->{Input}{Prompt_Size}) {
+            $winref->{Input}{Cursor}--;
+        }
+      } else {
+            $winref->{Input}{Cursor}--;
+        }
+            _refresh_edit($self, $window_id);
+            doupdate();
     }
     return;
   }
@@ -727,14 +744,22 @@ sub got_curses_input {
 
   # Interrupt.
   if ($key eq '^\\') {
-    &shutdown;
+
+    $kernel->alias_remove($self->[ALIAS]);
+    delete $heap->{stderr_reader};
+    undef $console;
+    if (defined $heap->{input_session}) {
+        delete $heap->{input_session};          
+    }
+    $kernel->signal($kernel, "UIDESTROY");
     return;
   }
 
   # Delete a character.
   if ($key eq '^D' or $key eq 'KEY_DC') {
-    if ($winref->{Input}{Cursor} < length($winref->{Input}{Data})) {
-      substr($winref->{Input}{Data}, $winref->{Input}{Cursor}, 1) = '';
+       my $csize = $winref->{Input}{Cursor} - $winref->{Input}{Prompt_Size};
+    if ($csize < length($winref->{Input}{Data})) {
+      substr($winref->{Input}{Data}, $winref->{Input}{Cursor} - $winref->{Input}{Prompt_Size}, 1) = '';
       _refresh_edit($self, $window_id);
       doupdate();
     }
@@ -753,7 +778,7 @@ sub got_curses_input {
 
   # Forward character.
   if ($key eq '^F' or $key eq 'KEY_RIGHT') {
-    if ($winref->{Input}{Cursor} < length($winref->{Input}{Data})) {
+    if (($winref->{Input}{Cursor} - $winref->{Input}{Prompt_Size}) < length($winref->{Input}{Data})) {
       $winref->{Input}{Cursor}++;
       _refresh_edit($self, $window_id);
       doupdate();
@@ -764,10 +789,12 @@ sub got_curses_input {
   # Backward delete character.
   if ($key eq '^H' or $key eq "^?" or $key eq 'KEY_BACKSPACE') {
     if ($winref->{Input}{Cursor}) {
+     if ($winref->{Input}{Cursor} > ($winref->{Input}{Prompt_Size} )) {
       $winref->{Input}{Cursor}--;
-      substr($winref->{Input}{Data}, $winref->{Input}{Cursor}, 1) = '';
+      substr($winref->{Input}{Data}, $winref->{Input}{Cursor} - $winref->{Input}{Prompt_Size}, 1) = '';
       _refresh_edit($self, $window_id);
       doupdate();
+     }
     }
     return;
   }
@@ -1282,28 +1309,29 @@ sub _refresh_buffer {
     my $line = $winref->{Buffer}->[$buffer_y]; # does this work?
     my $column = 1;
     while (length $line) {
-      if ($line =~ s/^\0\(blink_(on|off)\)//) {
-         if ($1 eq 'on') { $screen->attron(A_BLINK); }
-         if ($1 eq 'off') { $screen->attroff(A_BLINK); }
-         $screen->noutrefresh();
+      while ($line =~ s/^\0\(([^)]+)\)//) {
+        my $cmd = $1;
+        if ($cmd =~ /blink_(on|off)/) {
+          if ($1 eq 'on') { $screen->attron(A_BLINK); }
+          if ($1 eq 'off') { $screen->attroff(A_BLINK); }
+          $screen->noutrefresh();
+        }
+        elsif ($cmd =~ /bold_(on|off)/) {
+          if ($1 eq 'on') { $screen->attron(A_BOLD); }
+          if ($1 eq 'off') { $screen->attroff(A_BOLD); }
+          $screen->noutrefresh();
+        }
+        elsif ($cmd =~ /underline_(on|off)/) {
+          if ($1 eq 'on') { $screen->attron(A_UNDERLINE); }
+          if ($1 eq 'off') { $screen->attroff(A_UNDERLINE); }
+          $screen->noutrefresh();
+        }
+        else {
+          $screen->attrset($self->[PALETTE]->{$cmd}->[PAL_PAIR]); 
+          $screen->noutrefresh();
+        }
       }
 
-      if ($line =~ s/^\0\(bold_(on|off)\)//) {
-         if ($1 eq 'on') { $screen->attron(A_BOLD); }
-         if ($1 eq 'off') { $screen->attroff(A_BOLD); }
-         $screen->noutrefresh();
-      }
-
-      if ($line =~ s/^\0\(underline_(on|off)\)//) {
-         if ($1 eq 'on') { $screen->attron(A_UNDERLINE); }
-         if ($1 eq 'off') { $screen->attroff(A_UNDERLINE); }
-         $screen->noutrefresh();
-      }
-
-      if ($line =~ s/^ \0 \( ([^\)]+) \) //x) {
-        $screen->attrset($self->[PALETTE]->{$1}->[PAL_PAIR]); 
-        $screen->noutrefresh();
-      }
       if ($line =~ s/^([^\0]+)//x) {
 
         # TODO: This needs to be revised so it cuts off the last word,
@@ -1354,6 +1382,7 @@ sub _set_color {
      re      => COLOR_RED,      red     => COLOR_RED,
      wh      => COLOR_WHITE,    white   => COLOR_WHITE,
      ye      => COLOR_YELLOW,   yellow  => COLOR_YELLOW,
+     de      => -1,             default => -1,
    );
 
   my %attribute_table =
@@ -1464,6 +1493,9 @@ sub _set_color {
 sub terminal_stopped {
   if (DEBUG) { print ERRS "Enter terminal_stopped\n"; }
   my ($kernel, $heap) = @_[KERNEL, HEAP];
+    $kernel->alias_remove($_[OBJECT][ALIAS]);
+    delete $heap->{stderr_reader};
+    undef $console;
 
   if (defined $heap->{input_session}) {
     delete $heap->{input_session};
@@ -1557,7 +1589,9 @@ sub _refresh_edit {
   $edit->attron(A_NORMAL);
   $edit->erase();
   $edit->noutrefresh();
-
+  if ($winref->{Input}{Prompt}) {
+    $visible_input = $winref->{Input}{Prompt} . $visible_input;
+  }
   while (length($visible_input)) {
     if ($visible_input =~ /^[\x00-\x1f]/) {
       $edit->attron(A_UNDERLINE);
@@ -1597,7 +1631,7 @@ sub command_history {
     # edit box.
 
     $winref->{Input}{Data_Save} = $winref->{Input}{Data} = "";
-    $winref->{Input}{Cursor_Save} = $winref->{Input}{Cursor} = 0;
+    $winref->{Input}{Cursor_Save} = $winref->{Input}{Cursor} = $winref->{Input}{Prompt_Size} || 0;
     $winref->{Input}{History_Position} = -1;
 
     _refresh_edit($self, $window_id);
@@ -1619,7 +1653,9 @@ sub command_history {
         $winref->{Input}{Data} = 
           $winref->{Input}{Command_History}->[++$winref->{Input}{History_Position}];
         $winref->{Input}{Cursor} = length($winref->{Input}{Data});
-
+        if ($winref->{Input}{Prompt_Size}) {
+          $winref->{Input}{Cursor} += $winref->{Input}{Prompt_Size};
+        }
         _refresh_edit($self, $window_id);
         doupdate();
       }
@@ -1631,7 +1667,9 @@ sub command_history {
     elsif ($winref->{Input}{History_Position} < @{$winref->{Input}{Command_History}} - 1) {
       $winref->{Input}{Data} = $winref->{Input}{Command_History}->[++$winref->{Input}{History_Position}];
       $winref->{Input}{Cursor} = length($winref->{Input}{Data});
-
+        if ($winref->{Input}{Prompt_Size}) {
+          $winref->{Input}{Cursor} += $winref->{Input}{Prompt_Size};
+        }
       _refresh_edit($self, $window_id);
       doupdate();
     }
@@ -1654,6 +1692,9 @@ sub command_history {
     elsif ($winref->{Input}{History_Position} > 0) {
       $winref->{Input}{Data} = $winref->{Input}{Command_History}->[--$winref->{Input}{History_Position}];
       $winref->{Input}{Cursor} = length($winref->{Input}{Data});
+        if ($winref->{Input}{Prompt_Size}) {
+          $winref->{Input}{Cursor} += $winref->{Input}{Prompt_Size};
+        }
       _refresh_edit($self, $window_id);
       doupdate();
     }
@@ -1746,7 +1787,21 @@ if (DEBUG) { print ERRS $status, "<-status ref\n"; }
 
 }
 
-
+sub set_input_prompt {
+  if (DEBUG) { print ERRS "Enter set_input_prompt\n"; }
+  my $self = shift;
+  my $window_id = shift;
+  my $prompt = shift;
+  my $validity = validate_window($self, $window_id);
+  if ($validity) {
+    my $winref = $self->[WINDOW]->{$window_id};
+    $winref->{Input}{Cursor} -= $winref->{Input}{Prompt_Size};
+    $winref->{Input}{Prompt} = $prompt;
+    $winref->{Input}{Cursor} = $winref->{Input}{Prompt_Size} = length $prompt;
+      _refresh_edit($self, $window_id);
+      doupdate();
+ }
+}
 
 sub set_errlevel {}
 sub get_errlevel {}
@@ -1759,13 +1814,20 @@ sub debug {
 }
 
 sub shutdown {
-    $_[KERNEL]->alias_remove($_[OBJECT][ALIAS]);
-    delete $_[HEAP]->{stderr_reader};
-    undef $console;
-    if (defined $_[HEAP]->{input_session}) {
-      $_[KERNEL]->post( $_[HEAP]->{input_session}, $_[HEAP]->{input_event},
-                        undef, 'interrupt' );
-    }
+my $self = shift;
+
+$poe_kernel->post($self->[ALIAS], "_stop");
+
+#    $_[KERNEL]->alias_remove($_[OBJECT][ALIAS]);
+#    delete $_[HEAP]->{stderr_reader};
+#    undef $console;
+#    if (defined $_[HEAP]->{input_session}) {
+#      $_[KERNEL]->post( $_[HEAP]->{input_session}, $_[HEAP]->{input_event},
+#                        undef, 'interrupt' );
+
+#clean up, and close Term::Visual's session so that the only thing that is left is client side, and when ^\ is punched in, clean up things that would leak otherwise, and interrupt?
+
+#    }
 }
 
 1;
@@ -1802,6 +1864,8 @@ Term::Visual - split-terminal user interface
 
         Buffer_Size  => 1000,
         History_Size => 50,
+
+        Input_Prompt => "[foo] ", # Set the input prompt for the input line.
  
         Use_Title    => 0, # Don't use a titlebar 
         Use_Status   => 0, # Don't use a statusbar
@@ -1822,6 +1886,8 @@ Term::Visual - split-terminal user interface
     $kernel->post( interface => send_me_input => "got_term_input" );
                     
     $vt->set_status_field( $window_id, bar => $value );
+
+    $vt->set_input_prompt($window_id, "\$");
 
     $vt->print( $window_id, "my Window ID is $window_id" );
   }
@@ -1935,6 +2001,10 @@ Set the size of the scrollback buffer
 Set the command history size
 
   History_Size => 50
+
+Set the input prompt of the window
+
+  Input_Prompt => "foo"
 
 Set the title of the window
 
@@ -2055,6 +2125,16 @@ Set the color palette or specific colorname's value.
          are set and used by Term::Visual internally.
          It is safe to redifine there values.
 
+=item color codes
+
+Once your color definitions are set in the palette you must insert
+color codes to your output.
+These are formatted as follows: "\0(ncolor)"
+
+So if you wanted to print something with a color you could simply use:
+
+  $vt->print( $window_id, "\0(color_name)My this is a wonderful color." );
+
 =item set_title
 
   $vt->set_title( $window_id, "This is the new Title" );
@@ -2088,6 +2168,12 @@ Switch between windows
   $vt->set_status_field( $window_id, field => "value" );
 
   $vt->set_status_field( $window_id, foo => "bar", biz => "baz" );
+
+=item set_input_prompt
+
+  $vt->set_input_prompt($window_id, "\$");
+
+  $vt->set_input_prompt($window_id, "[foo]");
 
 =item columnize
   columnize takes a list of text and formats it into
@@ -2307,11 +2393,11 @@ Scroll down a line.
 
 
 Except where otherwise noted, 
-Term::Visual is Copyright 2002, 2003, 2004 Charles Ayres. All rights reserved.
+Term::Visual is Copyright 2002-2007 Charles Ayres. All rights reserved.
 Term::Visual is free software; you may redistribute it and/or modify
 it under the same terms as Perl itself.
 
-Questions and Comments can be sent to lunartear+visterm@ambientheory.com
+Questions and Comments can be sent to lunartear@cpan.org
 
 Please send bug reports and wishlist items to:
  http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Term-Visual

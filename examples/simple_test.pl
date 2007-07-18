@@ -2,7 +2,7 @@
 use strict;
 sub Term::Visual::DEBUG () { 1 }
 sub Term::Visual::DEBUG_FILE () { 'test.log' }
-use lib '../.';
+#use lib '../.';
 use Carp;
 use POE;
 use Term::Visual;
@@ -40,7 +40,7 @@ my $window_id = $vt->create_window(
 
        Buffer_Size => 1000,
        History_Size => 50,
-
+       Input_Prompt => "[foo] ",
        Title => "Title of window_one"  );
 
 POE::Session->create
@@ -50,6 +50,7 @@ POE::Session->create
       update_time    => \&update_time,
       update_name    => \&update_name,
       test_buffer    => \&test_buffer,
+      _stop          => \&stop_guts,
     }
   );
 
@@ -70,7 +71,9 @@ sub start_guts {
   # Start updating the time.
   $kernel->yield( "update_time" );
   $kernel->yield( "update_name" );
+  $vt->set_input_prompt($window_id, "\$");
 #  $kernel->yield( "test_buffer" );
+#  $vt->shutdown;
 }
 
 ### The main input handler for this program.  This would be supplied
@@ -81,11 +84,16 @@ sub handle_term_input {
   my ($kernel, $heap, $input, $exception) = @_[KERNEL, HEAP, ARG0, ARG1];
 
   # Got an exception.  These are interrupt (^C) or quit (^\).
-  if (defined $exception) {
-    warn "got exception: $exception";
-    exit;
+#  if (defined $exception) {
+#    warn "got exception: $exception";
+#    exit;
+#  }
+  if ($input eq 'quit') {
+   $kernel->yield('_stop'); 
   }
-  $vt->print($window_id, $input);
+  else {
+    $vt->print($window_id, $input);
+  }
 }
 
 ### Update the time on the status bar.
@@ -117,6 +125,17 @@ sub test_buffer {
   $kernel->alarm( test_buffer => int(time() / 60) * 60 + 20 ); 
 }
 
+sub stop_guts {
+  my ($kernel, $heap) = @_[KERNEL, HEAP];
+  $vt->shutdown;
+  $kernel->alarm_remove_all();
+  if (defined $heap->{input_session}) {
+    delete $heap->{input_session};
+  }
+
+}
+
+
 $poe_kernel->run();
-$vt->shutdown;
+#$vt->shutdown;
 exit 0;
