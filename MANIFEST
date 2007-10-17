@@ -3,7 +3,6 @@ MANIFEST
 Makefile.PL
 README
 Visual.pm
-visual.pm.diff
 Visual/StatusBar.pm
 examples/logmon.pl
 examples/no_status_title.pl

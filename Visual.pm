@@ -4,8 +4,8 @@ package Term::Visual;
 use strict;
 use warnings;
 use vars qw($VERSION $REVISION $console);
-$VERSION = '0.07';
-$REVISION = do {my@r=(q$Revision: 0.06 $=~/\d+/g);sprintf"%d."."%02d"x$#r,@r};
+$VERSION = '0.08';
+$REVISION = do {my@r=(q$Revision: 0.08 $=~/\d+/g);sprintf"%d."."%02d"x$#r,@r};
 #use Visual::StatusBar;
 use Term::Visual::StatusBar;
 use POE qw(Wheel::Curses Wheel::ReadWrite ); 
@@ -661,6 +661,13 @@ sub register_input {
 
   $heap->{input_session} = $sender->ID();
   $heap->{input_event}   = $event;
+ 
+   # Increase the sender's reference count so the session stays alive
+   # while the terminal is active.  We'll decrease the reference count
+   # in _stop so it can go away when the terminal does.
+ 
+   $kernel->refcount_increment( $sender->ID(), "terminal link" );
+
 }
 
 ### Get input from the Curses thing.
@@ -1498,6 +1505,7 @@ sub terminal_stopped {
     undef $console;
 
   if (defined $heap->{input_session}) {
+     $kernel->refcount_decrement( $heap->{input_session}, "terminal link" );
     delete $heap->{input_session};
   }
 }
@@ -1879,7 +1887,7 @@ Term::Visual - split-terminal user interface
      }
     );
 
-  sub _start_handler {
+  sub start_handler {
     my $kernel = $_[KERNEL];
 
     # Tell the terminal to send me input as "got_term_input".
